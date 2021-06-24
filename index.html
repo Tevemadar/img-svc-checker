@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>TODO supply a title</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            .wide{
+                width: 90%;
+            }
+        </style>
+        <script>
+            function clear(){
+                document.getElementById("log").value="";
+            }
+            function log(message){
+                document.getElementById("log").value+=message+"\n";
+            }
+            async function start(){
+                clear();
+                let source=document.getElementById("curation").value;
+                if(!source.endsWith(".tif")){
+                    log(`"${source}" does not ends with .tif, this utility works with .tifs only`);
+                    return;
+                }
+                log(`Analyzing "${source}"`);
+                source=source.match(/(https:\/\/object.cscs.ch\/v1\/AUTH_[^\/]+\/[^\/]+)\/(.+\/)[^\/]+.tif/);
+                let container=source[1];
+                let prefix=source[2];
+                log(`Container: ${container}`);
+                log(`Prefix: ${prefix}`);
+                let kglist=`${container}?prefix=${prefix}&format=text`;
+                log(`Attempting to get list as ${kglist}`);
+                let list=await fetch(`kglist.php?${kglist}`).then(result=>result.text());
+                let tiffs=new Set();
+                for(let line of list.split("\n"))
+                    if(line.endsWith(".tif")){
+                        let tiff=line.substring(prefix.length);
+                        if(tiffs.has(tiff)){
+                            log(`Duplicate entry: ${tiff}`);
+                            return;
+                        }
+                        tiffs.add(tiff);
+                    }
+                log(`${tiffs.size} images found.`);
+                log("Checking image service container");
+                let bucket=document.getElementById("imageservice").value;
+                if(!bucket.endsWith("/"))
+                    bucket+="/";
+                let bucketlist=await fetch(`${bucket}?delimiter=/&format=text`).then(result=>result.text());
+                let extras=0;
+                let count=0;
+                for(let line of bucketlist.split("\n"))
+                    if(line.length>0){
+                        if(line.endsWith("/"))
+                            line=line.substring(0,line.length-1);
+                        if(tiffs.has(line))
+                            count++;
+                        else{
+                            extras++;
+                            log(`Extra file: ${line}`);
+                        }
+                    }
+                if(count!==tiffs.size || extras>2){
+                    log(`${count} matching files (out of ${tiffs.size}) and ${extras} extra files found.`);
+                    log("Please check if this dataset and this container really form a pair.");
+                    return;
+                }
+                count=await fetch(`buckethead.php?${bucket}`).then(result=>result.text());
+                count=parseInt(count.match(/X-Container-Object-Count: (\d+)/m)[1]);
+                log(`Container contains ${count} files (${extras} extra(s) included).`);
+                log("Collecting DZI descriptors");
+                let dzis=[];
+                let errors=0;
+                let hack=document.getElementById("log");
+                let base=hack.value;
+                for(let tif of tiffs){
+                    hack.value=base;
+                    log(`${tiffs.size-dzis.length} / ${tif}`);
+                    let name=tif.substring(0,tif.length-3);
+                    dzis.push(await fetch(`${bucket+tif}/${name}dzi`).then(result=>result.text()).catch(fail=>{errors++;log(fail);base=hack.value;}));
+                }
+                hack.value=base;
+                if(errors>0){
+                    log(`${errors} error(s) found.`);
+                    return;
+                }
+                log("DZI descriptors successfully downloaded.");
+                let tiles=0;
+                for(let dzi of dzis){
+                    let tilesize=parseInt(dzi.match(/TileSize="(\d+)"/m)[1]);
+                    let width=parseInt(dzi.match(/Width="(\d+)"/m)[1]);
+                    let height=parseInt(dzi.match(/Height="(\d+)"/m)[1]);
+                    tiles++;
+                    while(width>1 || height>1){
+                        tiles+=Math.ceil(width/tilesize)*Math.ceil(height/tilesize);
+                        width=Math.ceil(width/2);
+                        height=Math.ceil(height/2);
+                    }
+                }
+                log(`${tiles} tiles calculated`);
+                log(`${tiffs.size} known DZI descriptors`);
+                log(`${extras} extra files`);
+                let files=tiles+extras+tiffs.size;
+                log(`${files} files are expected, ${count} are present.`);
+                if(files===count)
+                    log(`Ingestion seems to be be successful.`);
+                else
+                    log(`${files-count} files missing, ingestion may have failed.`);
+            }
+        </script>
+    </head>
+    <body>
+        <input id="curation" placeholder="Link of a source image of the series (from kg)" class="wide"><br>
+        <input id="imageservice" placeholder="Link of the image service bucket" class="wide"><br>
+        <button onclick="start()">Go</button>
+        <hr>
+        <textarea id="log" rows="20"  class="wide"></textarea>
+    </body>
+</html>
