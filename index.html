@@ -44,7 +44,7 @@
                     }
                 log(`${tiffs.size} images found.`);
                 log("Checking image service container");
-                let bucket=document.getElementById("imageservice").value;
+                let bucket=`https://object.cscs.ch/v1/AUTH_08c08f9f119744cbbf77e216988da3eb/${document.getElementById("imageservice").value}`;
                 if(!bucket.endsWith("/"))
                     bucket+="/";
                 let bucketlist=await fetch(`${bucket}?delimiter=/&format=text`).then(result=>result.text());
@@ -99,10 +99,10 @@
                     }
                 }
                 log(`${tiles} tiles calculated`);
-                log(`${tiffs.size} known DZI descriptors`);
+                log(`${tiffs.size} DZI descriptors`);
                 log(`${extras} extra files`);
                 let files=tiles+extras+tiffs.size;
-                log(`${files} files are expected, ${count} are present.`);
+                log(`${files} files expected, ${count} present.`);
                 if(files===count)
                     log(`Ingestion seems to be be successful.`);
                 else
@@ -111,10 +111,10 @@
         </script>
     </head>
     <body>
-        <input id="curation" placeholder="Link of a source image of the series (from kg)" class="wide"><br>
-        <input id="imageservice" placeholder="Link of the image service bucket" class="wide"><br>
+        <input id="curation" placeholder="Link of a source image of the series (from kg) - column E" class="wide"><br>
+        <input id="imageservice" placeholder="Image service bucket bucket identifier (imgsvc-...) - column A" class="wide"><br>
         <button onclick="start()">Go</button>
         <hr>
-        <textarea id="log" rows="20"  class="wide"></textarea>
+        <textarea id="log" rows="25" class="wide"></textarea>
     </body>
 </html>
