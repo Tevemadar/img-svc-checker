@@ -99,32 +99,64 @@
                 }
                 log("DZI descriptors successfully downloaded.");
                 let tiles=0;
+                let pure=0;
                 for(let dzi of dzis){
                     let tilesize=parseInt(dzi.match(/TileSize="(\d+)"/m)[1]);
                     let width=parseInt(dzi.match(/Width="(\d+)"/m)[1]);
                     let height=parseInt(dzi.match(/Height="(\d+)"/m)[1]);
                     tiles++;
+                    pure++;
+                    let top=true;
                     while(width>1 || height>1){
+                        pure+=Math.ceil(width/tilesize)*Math.ceil(height/tilesize);
+                        let w=false,h=false;
+                        if(top){
+                            if(width%tilesize===0){
+                                width++;
+                                w=true;
+                            }
+                            if(height%tilesize===0){
+                                height++;
+                                h=true;
+                            }
+                            top=false;
+                        }
                         tiles+=Math.ceil(width/tilesize)*Math.ceil(height/tilesize);
+                        if(w)width--;
+                        if(h)height--;
                         width=Math.ceil(width/2);
                         height=Math.ceil(height/2);
                     }
                 }
-                log(`${tiles} tiles calculated`);
+                let files=tiles+extras+tiffs.size;
+                let purefiles=pure+extras+tiffs.size;
                 log(`${tiffs.size} DZI descriptors`);
                 log(`${extras} extra files`);
-                let files=tiles+extras+tiffs.size;
-                log(`${files} files expected, ${count} present.`);
-                if(files===count)
+                if(files===count){
+                    log(`${tiles} tiles calculated`);
+                    log(`${files} files are expected, ${count} are present.`);
                     log(`Ingestion seems to be be successful.`);
-                else
+                    if(pure!==tiles)
+                        log("Series has extra files due to a PyramidIO bug.");
+                } else if(purefiles===count) {
+                    log(`${pure} tiles calculated`);
+                    log(`${purefiles} files are expected, ${count} are present.`);
+                    log(`Upload seems to be successful.`);
+                } else if(pure===tiles) {
+                    log(`${tiles} tiles are calculated.`);
+                    log(`${files} files are expected, ${count} are present.`);
                     log(`${files-count} files missing, ingestion may have failed.`);
+                } else {
+                    log(`${tiles} or ${pure} tiles are calculated with or without PyramidIO bug.`);
+                    log(`${files} or ${purefiles} files are expected, ${count} are present.`);
+                    log("Ingestion or upload may have failed.");
+                }
             }
         </script>
     </head>
     <body onload="startup()">
         <input id="curation" placeholder="Link of a source image of the series (from kg)" class="wide"><br>
-        <input id="imageservice" placeholder="Image service bucket bucket identifier (imgsvc-...)" class="wide"><br>
+        <input id="imageservice" placeholder="Image service bucket identifier (imgsvc-...)" class="wide"><br>
         <button onclick="start()">Go</button>
         <hr>
         <textarea id="log" rows="25" class="wide"></textarea>
